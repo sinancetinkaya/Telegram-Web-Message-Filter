@@ -14,80 +14,89 @@
 (async () => {
     'use strict';
 
-    async function addButtons(groupNode) {
-        if (groupNode.querySelector(".btn-container")) return;
+async function addButtons(groupNode) {
+    // Prevent re-adding if already present
+    if (groupNode.querySelector(".btn-container")) return;
 
-        // Find the user ID anywhere in the group (avatar or name)
-        let message = groupNode.querySelector("[data-peer-id]");
-        if (!message) return;
+    // Identify the user context
+    let message = groupNode.querySelector("[data-peer-id]");
+    if (!message) return;
 
-        const user_id = message.getAttribute("data-peer-id");
-        const isBlocked = await GM_getValue(user_id, false);
+    const user_id = message.getAttribute("data-peer-id");
+    const isBlocked = await GM_getValue(user_id, false);
 
-        const container = document.createElement("div");
-        container.className = "btn-container";
-        container.style.margin = "5px 0";
+    // Ensure the group acts as a reference for the absolute-positioned buttons
+    groupNode.style.position = 'relative';
 
-        const buttonStyle = {
-            fontSize: "12px",
-            padding: "4px 8px",
-            cursor: "pointer",
-            marginRight: "5px",
-            border: "none",
-            borderRadius: "6px",
-            fontWeight: "bold",
-            color: "#fff",
-            backgroundColor: "#2ea6ff"
-        };
+    const container = document.createElement("div");
+    container.className = "btn-container";
+    Object.assign(container.style, {
+        position: "absolute",
+        top: "5px",
+        right: "5px",
+        zIndex: "1000",
+        display: "flex",
+        gap: "5px"
+    });
 
-        const toggleBtn = document.createElement("button");
-        toggleBtn.innerText = isBlocked ? "Show" : "Hide";
-        Object.assign(toggleBtn.style, buttonStyle);
+    const buttonStyle = {
+        fontSize: "12px",
+        padding: "4px 8px",
+        cursor: "pointer",
+        border: "none",
+        borderRadius: "6px",
+        fontWeight: "bold",
+        color: "#fff"
+    };
 
-        const blockBtn = document.createElement("button");
-        blockBtn.innerText = isBlocked ? "Unblock" : "Block";
-        Object.assign(blockBtn.style, buttonStyle);
-        if (isBlocked) blockBtn.style.backgroundColor = "#ff4757";
+    const toggleBtn = document.createElement("button");
+    toggleBtn.innerText = isBlocked ? "Show" : "Hide";
+    Object.assign(toggleBtn.style, buttonStyle, { backgroundColor: "#2ea6ff" });
 
-        // Toggle Visibility logic
-        const setVisibility = (visible) => {
-            const all = groupNode.getElementsByTagName("*");
-            for (let i = 0; i < all.length; i++) {
-                if (all[i] !== toggleBtn && all[i] !== blockBtn && !container.contains(all[i])) {
-                    all[i].style.opacity = visible ? "1" : "0";
-                }
-            }
-        };
+    const blockBtn = document.createElement("button");
+    blockBtn.innerText = isBlocked ? "Unblock" : "Block";
+    Object.assign(blockBtn.style, buttonStyle, { backgroundColor: isBlocked ? "#ff4757" : "#2ea6ff" });
 
-        setVisibility(!isBlocked);
+    // Function to toggle opacity while keeping space occupied
+    const setVisibility = (visible) => {
+        // Target only the message bubble content
+        const bubbles = groupNode.querySelectorAll(".bubble");
+        bubbles.forEach(el => {
+            el.style.opacity = visible ? "1" : "0";
+            // Disable interaction when hidden
+            el.style.pointerEvents = visible ? "auto" : "none";
+        });
+    };
 
-        toggleBtn.onclick = (e) => {
-            e.stopPropagation();
-            let isVisible = (toggleBtn.innerText === "Show");
-            setVisibility(isVisible);
-            toggleBtn.innerText = isVisible ? "Hide" : "Show";
-        };
+    // Initial state
+    if (isBlocked) setVisibility(false);
 
-        blockBtn.onclick = async (e) => {
-            e.stopPropagation();
-            let currentlyBlocked = await GM_getValue(user_id, false);
+    toggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        let isVisible = (toggleBtn.innerText === "Show");
+        setVisibility(isVisible);
+        toggleBtn.innerText = isVisible ? "Hide" : "Show";
+    };
 
-            if (currentlyBlocked) {
-                await GM_deleteValue(user_id);
-                blockBtn.innerText = "Block";
-                blockBtn.style.backgroundColor = "#2ea6ff";
-            } else {
-                await GM_setValue(user_id, { name: "Blocked User" });
-                blockBtn.innerText = "Unblock";
-                blockBtn.style.backgroundColor = "#ff4757";
-            }
-        };
+    blockBtn.onclick = async (e) => {
+        e.stopPropagation();
+        let currentlyBlocked = await GM_getValue(user_id, false);
 
-        container.appendChild(toggleBtn);
-        container.appendChild(blockBtn);
-        groupNode.prepend(container);
-    }
+        if (currentlyBlocked) {
+            await GM_deleteValue(user_id);
+            blockBtn.innerText = "Block";
+            blockBtn.style.backgroundColor = "#2ea6ff";
+        } else {
+            await GM_setValue(user_id, { name: "Blocked User" });
+            blockBtn.innerText = "Unblock";
+            blockBtn.style.backgroundColor = "#ff4757";
+        }
+    };
 
+    container.appendChild(toggleBtn);
+    container.appendChild(blockBtn);
+    groupNode.appendChild(container);
+}  
     async function walk(node) {
         if (node.nodeType !== 1) return;
         if (node.matches("div[class='bubbles-group'],[class^='bubbles-group bubbles-group-']")) {
