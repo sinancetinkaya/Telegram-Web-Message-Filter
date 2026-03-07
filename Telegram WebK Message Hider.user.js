@@ -15,28 +15,30 @@
     'use strict';
 
 async function addButtons(groupNode) {
-    // Prevent re-adding if already present
     if (groupNode.querySelector(".btn-container")) return;
 
-    // Identify the user context
     let message = groupNode.querySelector("[data-peer-id]");
     if (!message) return;
 
     const user_id = message.getAttribute("data-peer-id");
     const isBlocked = await GM_getValue(user_id, false);
 
-    // Ensure the group acts as a reference for the absolute-positioned buttons
+    // 1. We keep the group relative so the buttons don't float outside it
     groupNode.style.position = 'relative';
 
     const container = document.createElement("div");
     container.className = "btn-container";
+
+    // 2. Use sticky instead of absolute to keep it CONTAINED in the group
     Object.assign(container.style, {
-        position: "absolute",
-        top: "5px",
-        right: "5px",
-        zIndex: "1000",
+        position: "sticky",
+        top: "0px",
+        left: "0px",
+        zIndex: "100",
         display: "flex",
-        gap: "5px"
+        gap: "5px",
+        paddingBottom: "5px",
+        backgroundColor: "transparent" // Keeps it clean against the chat background
     });
 
     const buttonStyle = {
@@ -57,18 +59,14 @@ async function addButtons(groupNode) {
     blockBtn.innerText = isBlocked ? "Unblock" : "Block";
     Object.assign(blockBtn.style, buttonStyle, { backgroundColor: isBlocked ? "#ff4757" : "#2ea6ff" });
 
-    // Function to toggle opacity while keeping space occupied
     const setVisibility = (visible) => {
-        // Target only the message bubble content
         const bubbles = groupNode.querySelectorAll(".bubble");
         bubbles.forEach(el => {
             el.style.opacity = visible ? "1" : "0";
-            // Disable interaction when hidden
             el.style.pointerEvents = visible ? "auto" : "none";
         });
     };
 
-    // Initial state
     if (isBlocked) setVisibility(false);
 
     toggleBtn.onclick = (e) => {
@@ -81,7 +79,6 @@ async function addButtons(groupNode) {
     blockBtn.onclick = async (e) => {
         e.stopPropagation();
         let currentlyBlocked = await GM_getValue(user_id, false);
-
         if (currentlyBlocked) {
             await GM_deleteValue(user_id);
             blockBtn.innerText = "Block";
@@ -95,9 +92,12 @@ async function addButtons(groupNode) {
 
     container.appendChild(toggleBtn);
     container.appendChild(blockBtn);
-    groupNode.appendChild(container);
-}  
-    async function walk(node) {
+
+    // 3. Prepend to ensure it is the first child, but inside the container
+    groupNode.prepend(container);
+}
+
+  async function walk(node) {
         if (node.nodeType !== 1) return;
         if (node.matches("div[class='bubbles-group'],[class^='bubbles-group bubbles-group-']")) {
             await addButtons(node);
