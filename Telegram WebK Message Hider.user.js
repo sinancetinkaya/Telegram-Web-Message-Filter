@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Telegram WebK Message Hider - Final Version
-// @namespace    https://github.com/sinancetinkaya/Telegram-WebK-Message-Hider
+// @namespace    https://github.com/sinancetinkaya/Telegram-Web-Message-Hider
 // @version      2026-03-07
 // @license      MIT
 // @description  Persistent hide/show and block/unblock buttons for Telegram WebK
