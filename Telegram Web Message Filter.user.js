@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Telegram Web Message Filter
 // @namespace    https://github.com/sinancetinkaya/Telegram-Web-Message-Filter
-// @version      2026-03-09
+// @version      2026-03-10
 // @license      MIT
 // @description  Hides messages from users in Telegram groups
 // @author       sinancetinkaya
@@ -11,13 +11,12 @@
 // @grant        GM_deleteValue
 // ==/UserScript==
 
-SUPPORTED_TELEGRAM_WEB_VERSIONS = ['a','k'];
+const SUPPORTED_TELEGRAM_WEB_VERSIONS = ['a','k'];
+const TELEGRAM_WEB_VERSION = window.location.pathname.split('/')[1];
 
 
 (async function() {
     'use strict';
-
-    const TELEGRAM_WEB_VERSION = window.location.pathname.split('/')[1];
 
     if(!SUPPORTED_TELEGRAM_WEB_VERSIONS.includes(TELEGRAM_WEB_VERSION)) {
       console.log("UNSUPPORTED TELEGRAM WEB VERSION: " + TELEGRAM_WEB_VERSION);
@@ -31,23 +30,24 @@ SUPPORTED_TELEGRAM_WEB_VERSIONS = ['a','k'];
         let message;
 
         if(TELEGRAM_WEB_VERSION == "a")
-          message = groupNode.querySelector("div[class*='shown'] > div[class^='Avatar'][data-peer-id][aria-label]");
+          message = groupNode.querySelector("div[class*='shown'] > div[class^='Avatar'][data-peer-id]");
         else
-          message = groupNode.querySelector("*[class='peer-title'][data-peer-id][data-with-premium-icon]");
+          message = groupNode.querySelector("div.bubbles-group-avatar-container > div.avatar,data-peer-id");
 
         if (!message) return;
 
         const user_id = message.getAttribute("data-peer-id");
         const isFiltered = await GM_getValue(user_id, false);
 
-        groupNode.style.position = 'relative';
+        // groupNode.style.position = 'relative';
 
         const container = document.createElement("div");
         container.className = "btn-container";
 
         Object.assign(container.style, {
-            position: "sticky",
+            position: "absolute",
             top: "0px",
+            right: "25px",
             zIndex: "100",
             display: "flex",
             gap: "5px",
@@ -108,15 +108,7 @@ SUPPORTED_TELEGRAM_WEB_VERSIONS = ['a','k'];
                 setVisibility(true);
                 toggleBtn.innerText = "Hide";
             } else {
-                let user_name;
-
-                if (TELEGRAM_WEB_VERSION == "a")
-                  user_name = message.getAttribute("aria-label");
-                else
-                  user_name = message.innerText;
-
-                await GM_setValue(user_id, { name: user_name });
-
+                await GM_setValue(user_id, true);
                 filterBtn.innerText = "Unfilter";
                 filterBtn.style.backgroundColor = "#ff4757";
                 setVisibility(false);
