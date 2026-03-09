@@ -1,128 +1,152 @@
 // ==UserScript==
-// @name         Telegram WebK Message Hider - Final Version
-// @namespace    https://github.com/sinancetinkaya/Telegram-Web-Message-Hider
-// @version      2026-03-07
+// @name         Telegram Web Message Filter
+// @namespace    https://github.com/sinancetinkaya/Telegram-Web-Message-Filter
+// @version      2026-03-09
 // @license      MIT
-// @description  Persistent hide/show and block/unblock buttons for Telegram WebK
-// @author       sinancetinkaya + modification
-// @match        https://web.telegram.org/k/*
+// @description  Hides messages from users in Telegram groups
+// @author       sinancetinkaya
+// @match        https://web.telegram.org/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
 // ==/UserScript==
 
-(async () => {
+SUPPORTED_TELEGRAM_WEB_VERSIONS = ['a','k'];
+
+
+(async function() {
     'use strict';
 
+    const TELEGRAM_WEB_VERSION = window.location.pathname.split('/')[1];
+
+    if(!SUPPORTED_TELEGRAM_WEB_VERSIONS.includes(TELEGRAM_WEB_VERSION)) {
+      console.log("UNSUPPORTED TELEGRAM WEB VERSION: " + TELEGRAM_WEB_VERSION);
+      return;
+    }
+
     async function addButtons(groupNode) {
-        // 1. Check if buttons already exist to prevent duplicates
+        // Double-check to prevent duplicate buttons
         if (groupNode.querySelector(".btn-container")) return;
 
-        // 2. Identify the user context
-        let message = groupNode.querySelector("*[class='peer-title'][data-peer-id][data-with-premium-icon]");
+        let message;
+
+        if(TELEGRAM_WEB_VERSION == "a")
+          message = groupNode.querySelector("div[class*='shown'] > div[class^='Avatar'][data-peer-id][aria-label]");
+        else
+          message = groupNode.querySelector("*[class='peer-title'][data-peer-id][data-with-premium-icon]");
+
         if (!message) return;
 
         const user_id = message.getAttribute("data-peer-id");
-        const user_name = message.innerText;
-        const isBlocked = await GM_getValue(user_id, false);
+        const isFiltered = await GM_getValue(user_id, false);
 
-        // 3. Ensure the group is a positioned reference for absolute children
-        if (getComputedStyle(groupNode).position === 'static') {
-            groupNode.style.position = 'relative';
-        }
+        groupNode.style.position = 'relative';
 
-        // 4. Create the floating header container
         const container = document.createElement("div");
         container.className = "btn-container";
 
-        // Position it ABOVE the bubble group
         Object.assign(container.style, {
-            position: "absolute",
+            position: "sticky",
             top: "0px",
-            left: "-50px",
-            zIndex: "1000",
+            zIndex: "100",
             display: "flex",
             gap: "5px",
-            pointerEvents: "auto"
+            padding: "4px 0",
+            marginBottom: "5px",
+            backgroundColor: "transparent"
         });
 
         const buttonStyle = {
-            fontSize: "12px",
-            padding: "4px 8px",
+            fontSize: "10px",
+            padding: "2px 6px",
             cursor: "pointer",
             border: "none",
-            borderRadius: "6px",
+            borderRadius: "4px",
             fontWeight: "bold",
-            color: "#fff"
+            color: "#fff",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.2)"
         };
 
         const toggleBtn = document.createElement("button");
-        toggleBtn.innerText = isBlocked ? "Show" : "Hide";
+        toggleBtn.innerText = isFiltered ? "Show" : "Hide";
         Object.assign(toggleBtn.style, buttonStyle, { backgroundColor: "#2ea6ff" });
 
-        const blockBtn = document.createElement("button");
-        blockBtn.innerText = isBlocked ? "Unfilter" : "Filter";
-        Object.assign(blockBtn.style, buttonStyle, { backgroundColor: isBlocked ? "#ff4757" : "#2ea6ff" });
+        const filterBtn = document.createElement("button");
+        filterBtn.innerText = isFiltered ? "Unfilter" : "Filter";
+        Object.assign(filterBtn.style, buttonStyle, { backgroundColor: isFiltered ? "#ff4757" : "#2ea6ff" });
 
-        // 5. Opacity-based hiding logic
         const setVisibility = (visible) => {
-            const bubbles = groupNode.querySelectorAll(".bubble");
+            let bubbles;
+
+            if(TELEGRAM_WEB_VERSION == "a")
+            bubbles = groupNode.querySelectorAll(".message-content-wrapper");
+            else
+            bubbles = groupNode.querySelectorAll(".bubble");
+
             bubbles.forEach(el => {
-                el.style.opacity = visible ? "1" : "0";
+                el.style.opacity = visible ? "1" : "0.1";
                 el.style.pointerEvents = visible ? "auto" : "none";
             });
         };
 
-        if (isBlocked) setVisibility(false);
+        if (isFiltered) setVisibility(false);
 
         toggleBtn.onclick = (e) => {
             e.stopPropagation();
-            let isVisible = (toggleBtn.innerText === "Show");
-            setVisibility(isVisible);
-            toggleBtn.innerText = isVisible ? "Hide" : "Show";
+            const isNowVisible = (toggleBtn.innerText === "Show");
+            setVisibility(isNowVisible);
+            toggleBtn.innerText = isNowVisible ? "Hide" : "Show";
         };
 
-        blockBtn.onclick = async (e) => {
+        filterBtn.onclick = async (e) => {
             e.stopPropagation();
-            let currentlyBlocked = await GM_getValue(user_id, false);
-            if (currentlyBlocked) {
+            const currentlyFiltered = await GM_getValue(user_id, false);
+            if (currentlyFiltered) {
                 await GM_deleteValue(user_id);
-                blockBtn.innerText = "Filter";
-                blockBtn.style.backgroundColor = "#2ea6ff";
+                filterBtn.innerText = "Filter";
+                filterBtn.style.backgroundColor = "#2ea6ff";
+                setVisibility(true);
+                toggleBtn.innerText = "Hide";
             } else {
+                let user_name;
+
+                if (TELEGRAM_WEB_VERSION == "a")
+                  user_name = message.getAttribute("aria-label");
+                else
+                  user_name = message.innerText;
+
                 await GM_setValue(user_id, { name: user_name });
-                blockBtn.innerText = "Unfilter";
-                blockBtn.style.backgroundColor = "#ff4757";
+
+                filterBtn.innerText = "Unfilter";
+                filterBtn.style.backgroundColor = "#ff4757";
+                setVisibility(false);
+                toggleBtn.innerText = "Show";
             }
         };
 
         container.appendChild(toggleBtn);
-        container.appendChild(blockBtn);
-
-        // Append to groupNode as an overlay
-        groupNode.appendChild(container);
+        container.appendChild(filterBtn);
+        groupNode.prepend(container);
     }
 
-  async function walk(node) {
-        if (node.nodeType !== 1) return;
-        if (node.matches("div[class='bubbles-group'],[class^='bubbles-group bubbles-group-']")) {
-            await addButtons(node);
-        }
-        for (let child of node.children) {
-            await walk(child);
-        }
-    }
+    const runScan = () => {
+        let groups;
 
-    const observer = new MutationObserver(async (mutations) => {
-        for (let { addedNodes } of mutations) {
-            for (let node of addedNodes) {
-                await walk(node);
-            }
-        }
-    });
+        if(TELEGRAM_WEB_VERSION == "a")
+          groups = document.querySelectorAll('div[class="messages-container"] div[id^="message-group-"]');
+        else
+          groups = document.querySelectorAll("div[class='bubbles-group'],[class^='bubbles-group bubbles-group-']");
 
-    // Initial run and observer setup
-    document.querySelectorAll("div[class='bubbles-group'],[class^='bubbles-group bubbles-group-']").forEach(addButtons);
-    const target = document.querySelector("#column-center");
-    if (target) observer.observe(target, { childList: true, subtree: true });
+        groups.forEach(addButtons);
+    };
+
+    // 1. MutationObserver handles real-time additions
+    const observer = new MutationObserver(runScan);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // 2. Scroll listener handles the Virtual Scroller's recycling of elements
+    window.addEventListener('scroll', runScan, true);
+
+    // Initial check
+    runScan();
 })();
